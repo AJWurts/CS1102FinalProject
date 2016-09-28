@@ -1,5 +1,5 @@
 ;; Alexander Wurts
-(require "world-cs1102.rkt")
+
 ;; a ball is (make-ball posn)
 (define-struct ball (posn))
 
@@ -67,32 +67,3 @@
                      
 
 
-;; Interpreter
-
-(define vars empty)
-
-;; A var is (make-var ID value)
-(define-struct var (ID value))
-
-;; init-vars: list[values] -> void
-(define (init-var a-list)
-  (set! vars (id-vars a-list 1))
-
-;; id-vars: list[values] id -> list[vars]
-(define (id-vars a-list id)
-  (cond [(empty? a-list) empty]
-        [(cons? a-list)
-         (append (list (make-var id (first a-list)))
-                 (id-vars (rest a-list) (+ 1 id)))]))
-
-;; lookup-var-by-shape: shape -> value
-(define (look-up-var-by-shape shape)
-  (vars-value (first (filter (lambda (
-;; lookup-var-by-id: id -> value
-
- 
-
-  
-;;run-animation: animation -> void
-(define (run-animation anim)
-  (run-cmds (animation-cmds anim))) 
