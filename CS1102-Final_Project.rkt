@@ -1,10 +1,10 @@
 ;; Alexander Wurts
 (require "world-cs1102.rkt")
-;; a ball is (make-ball posn)
-(define-struct ball (posn))
+;; a mshape is (make-mshape symbol posn color)
+(define-struct mshape (type posn color))
 
 ;; a wall is (make-wall posn number number)
-(define-struct wall (posn width height))
+(define-struct wall (posn width height color))
 
 ;; a delta is (make-delta x y)
 (define-struct delta (x y))
@@ -30,9 +30,9 @@
 
 ;;All examples written assuming that the shapes are placed in the correct location based on the original pictures, even though they are not
 (define ANIMATION1
-  (let [(circle (make-ball (make-posn 100 100)))
-        (wall1 (make-wall (make-posn 300 100) 300 100))
-        (wall2 (make-wall (make-posn 100 300) 100 300))]
+  (let [(circle (make-ball 'circle (make-posn 100 100) 'red))
+        (wall1 (make-wall (make-posn 300 100) 300 100 'blue))
+        (wall2 (make-wall (make-posn 100 300) 100 300 'blue))]
  
   (make-animation 400 400
                   (list
@@ -59,7 +59,7 @@
         (wall2 (make-wall (make-posn 100 300) 100 300))]
     (make-animation 400 400
                     (list
-                     (make-init-shapes-cmd (list circle wall1))
+                     (make-init-shapes-cmd (list ( circle wall1))
                      (make-move-until-collide circle (make-delta 0 4))
                      (make-move-until-collide circle (make-delta 4 0))
                      (make-display-shape-cmd wall2)
@@ -87,9 +87,11 @@
 
 ;; lookup-var-by-shape: shape -> value
 (define (look-up-var-by-shape shape)
-  (vars-value (first (filter (lambda (
+  (vars-value (first (filter (lambda ( ))))))
+  
 ;; lookup-var-by-id: id -> value
-
+(define (lookup-var-by-id id)
+  (first (filter (lambda (item) (= (var-ID item) id)) vars)))
  
 
   
