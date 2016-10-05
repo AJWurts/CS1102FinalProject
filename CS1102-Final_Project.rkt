@@ -24,22 +24,22 @@
 (define-struct move-shape-cmd (shape delta))
 (define-struct jump-shape-cmd (shape))
 (define-struct init-shapes-cmd (los))
-(define-struct cmds-until-xy-cond (shp1 minx miny maxx maxy cmd))
+(define-struct until-xy-cond-cmd (shape minx miny maxx maxy cmds))
 
 ;;All examples written assuming that the shapes are placed in the correct location based on the original pictures, even though they are not
 (define ANIMATION1
-  (let [(circle (make-shape 'ellipse (make-posn 100 100) 'red 5 5 1))
+  (let [(circle (make-shape 'ellipse (make-posn 0 100) 'red 5 5 1))
         (wall1 (make-shape 'rectangle (make-posn 300 100) 'blue 300 100 2))
         (wall2 (make-shape 'rectangle (make-posn 100 300) 'green 100 300 3))]
   (make-animation 400 400
                   (list
                    (make-init-shapes-cmd (list circle wall1))
                    (make-move-shape-cmd circle (make-delta 10 10))
-                   (make-cmds-until-xy-cond circle 100 95 105 105
+                   (make-until-xy-cond-cmd circle 95 95 105 105
                                             (list
-                                             (make-move-shape-cmd circle (make-delta 3 1))))
+                                             (make-move-shape-cmd circle (make-delta 3 0))))
                    (make-delete-shape-cmd wall1)
-                   (make-cmds-until-xy-cond circle 0 'na 0 'na
+                   (make-until-xy-cond-cmd circle 0 'na 0 'na
                                             (list
                                              (make-move-shape-cmd circle (make-delta -3 1)))))
                    )))
@@ -54,18 +54,18 @@
 ;                     (make-repeat-until-offscreen
 ;                      (make-jump-shape-cmd circle))))))
 
-(define ANIMATION3
-  (let [(circle (make-ball (make-posn 100 100)))
-        (wall1 (make-wall (make-posn 300 100) 300 100))
-        (wall2 (make-wall (make-posn 100 300) 100 300))]
-    (make-animation 400 400
-                    (list
-                     (make-init-shapes-cmd (list circle wall1))
-                     (make-move-until-collide circle (make-delta 0 4))
-                     (make-move-until-collide circle (make-delta 4 0))
-                     (make-display-shape-cmd wall2)
-                     (make-move-until-collide circle (make-delta -2 -2 )))))))
-                     
+;(define ANIMATION3
+;  (let [(circle (make-ball (make-posn 100 100)))
+;        (wall1 (make-wall (make-posn 300 100) 300 100))
+;        (wall2 (make-wall (make-posn 100 300) 100 300))]
+;    (make-animation 400 400
+;                    (list
+;                     (make-init-shapes-cmd (list circle wall1))
+;                     (make-move-until-collide circle (make-delta 0 4))
+;                     (make-move-until-collide circle (make-delta 4 0))
+;                     (make-display-shape-cmd wall2)
+;                     (make-move-until-collide circle (make-delta -2 -2 ))))))
+                    
 
 
 ;; Interpreter
@@ -85,11 +85,11 @@
 
 ;; lookup-shape-by-id: id -> value
 (define (lookup-var-by-id id)
-  (first (filter (lambda (item) (= (var-ID item) id)) shapes)))
+  (var-value (first (filter (lambda (item) (= (var-ID item) id)) shapes))))
  
 ;; lookup-shape: shape -> shape
  (define (lookup-shape a-shape)
-   (first (filter (lambda (a-var) (= (var-ID a-var) (shape-ID a-shape))) shapes)))
+   (var-value (first (filter (lambda (a-var) (= (var-ID a-var) (shape-ID a-shape))) shapes))))
 
 ;; delete-shape: shape -> void
 (define (delete-shape a-shape)
@@ -121,15 +121,15 @@
         [(delete-shape-cmd? cmd) (delete-shape (delete-shape-cmd-shape cmd))]
         [(move-shape-cmd? cmd) (move-shape (move-shape-cmd-shape cmd) (move-shape-cmd-delta cmd))]
         [(jump-shape-cmd? cmd) (jump-shape (jump-shape-cmd-shape cmd))]
-        [(init-shapes-cmd? cmd) (init-vars (init-shapes-cmd-los cmd))]))
-        ;[(cmds-until-xy-cond? cmd) (move-until-xy cmd)]
+        [(init-shapes-cmd? cmd) (init-vars (init-shapes-cmd-los cmd))]
+        [(until-xy-cond-cmd? cmd) (until-xy-cond (until-xy-cond-cmd-shape cmd) cmd)]))
 
 
 
 
 ;;move-shape: shape delta -> void
 (define (move-shape a-shape a-delta)
-  (edit-shape-posn a-shape (delta-x a-delta) (delta-y a-delta)))
+  (edit-shape-posn (lookup-shape a-shape) (delta-x a-delta) (delta-y a-delta)))
 
 ;;jump-shape: shape -> void
 (define (jump-shape a-shape)
@@ -147,9 +147,28 @@
                            (shape-height a-shape)
                            (shape-ID a-shape))))
 
-;;move-until-xy: cmd -> void
-;(define (move-until-xy cmd)
- 
+;;move-until-xy: shape cmd -> void
+(define (until-xy-cond a-shape cmd)
+  (let* ([nshape (lookup-shape a-shape)]
+        [shx (posn-x (shape-posn nshape))]
+        [shy (posn-y (shape-posn nshape))]
+        [minx (range-interp (until-xy-cond-cmd-minx cmd) 'low)]
+        [miny (range-interp (until-xy-cond-cmd-miny cmd) 'low)]
+        [maxx (range-interp (until-xy-cond-cmd-maxx cmd) 'high)]
+        [maxy (range-interp (until-xy-cond-cmd-maxy cmd) 'high)])
+ (cond [(and (and (>= shx minx) (<= shx maxx)) (and (>= shy miny) (<= shy maxy)))
+        (void)]
+       [else
+        (run-cmds (until-xy-cond-cmd-cmds cmd))
+        (until-xy-cond a-shape cmd)])))
+
+;;range-interp: value -> number
+(define (range-interp val type)
+  (cond [(symbol? val) (if (symbol=? type 'low)
+                           -10000
+                           10000)]
+        [else val]))
+        
 
 ;;show-all: -> void
 (define (show-all)
@@ -165,9 +184,10 @@
 
 ;;show-shape: shape scene -> scene
 (define (show-shape shape scene)
-  (place-image (make-shape-img shape)
-               (posn-x (shape-posn shape)) (posn-y (shape-posn shape))
-               scene))
+  (let ([nshape (lookup-shape shape)])
+  (place-image (make-shape-img nshape)
+               (posn-x (shape-posn nshape)) (posn-y (shape-posn nshape))
+               scene)))
 
 ;;make-shape-img: shape -> image
 (define (make-shape-img shape)
