@@ -28,31 +28,31 @@
 
 ;;All examples written assuming that the shapes are placed in the correct location based on the original pictures, even though they are not
 (define ANIMATION1
-  (let [(circle (make-shape 'ellipse (make-posn 0 100) 'red 5 5 1))
+  (let [(circle (make-shape 'ellipse (make-posn 0 100) 'red 20 20 1))
         (wall1 (make-shape 'rectangle (make-posn 300 100) 'blue 300 100 2))
         (wall2 (make-shape 'rectangle (make-posn 100 300) 'green 100 300 3))]
   (make-animation 400 400
                   (list
                    (make-init-shapes-cmd (list circle wall1))
-                   (make-move-shape-cmd circle (make-delta 10 10))
-                   (make-until-xy-cond-cmd circle 95 95 105 105
+                   (make-until-xy-cond-cmd circle 95 'na 'na 'na
                                             (list
-                                             (make-move-shape-cmd circle (make-delta 3 0))))
+                                             (make-move-shape-cmd circle (make-delta 5 0))))
                    (make-delete-shape-cmd wall1)
-                   (make-until-xy-cond-cmd circle 0 'na 0 'na
+                   (make-until-xy-cond-cmd circle 'na 'na 0 'na
                                             (list
                                              (make-move-shape-cmd circle (make-delta -3 1)))))
                    )))
 
-;(define ANIMATION2
-;  (let [(circle (make-ball (make-posn 100 100)))
-;        (wall1 (make-wall (make-posn 300 100) 300 100))
-;        (wall2 (make-wall (make-posn 100 300) 100 300))]
-;    (make-animation 400 400
-;                    (list
-;                     (make-init-shapes-cmd (list circle))
-;                     (make-repeat-until-offscreen
-;                      (make-jump-shape-cmd circle))))))
+(define ANIMATION2
+  (let [(circle (make-shape 'ellipse (make-posn 0 100) 'red 20 20 1))
+        (wall1 (make-shape 'rectangle (make-posn 300 100) 'blue 300 100 2))
+        (wall2 (make-shape 'rectangle (make-posn 100 300) 'green 100 300 3))]
+    (make-animation 400 400
+                    (list
+                     (make-init-shapes-cmd (list circle))
+                     (make-until-xy-cond-cmd circle 0 0 0 0
+                                         (list
+                                          (make-jump-shape-cmd circle)))))))
 
 ;(define ANIMATION3
 ;  (let [(circle (make-ball (make-posn 100 100)))
@@ -133,7 +133,7 @@
 
 ;;jump-shape: shape -> void
 (define (jump-shape a-shape)
-  (edit-shape-posn a-shape random(WIDTH) random(HEIGHT)))
+  (edit-shape-posn a-shape (random WIDTH) (random HEIGHT)))
 
 ;;edit-shape-posn: shape number number -> void
 (define (edit-shape-posn a-shape dx dy)
@@ -147,7 +147,7 @@
                            (shape-height a-shape)
                            (shape-ID a-shape))))
 
-;;move-until-xy: shape cmd -> void
+;;until-xy-cond: shape cmd -> void
 (define (until-xy-cond a-shape cmd)
   (let* ([nshape (lookup-shape a-shape)]
         [shx (posn-x (shape-posn nshape))]
@@ -156,7 +156,8 @@
         [miny (range-interp (until-xy-cond-cmd-miny cmd) 'low)]
         [maxx (range-interp (until-xy-cond-cmd-maxx cmd) 'high)]
         [maxy (range-interp (until-xy-cond-cmd-maxy cmd) 'high)])
- (cond [(and (and (>= shx minx) (<= shx maxx)) (and (>= shy miny) (<= shy maxy)))
+ (cond [(or (and (and (>= shx minx) (<= shx maxx)) (and (>= shy miny) (<= shy maxy)))
+            (or (or (< shx 0) (> shx WIDTH)) (or (< shy 0) (> shy HEIGHT))))
         (void)]
        [else
         (run-cmds (until-xy-cond-cmd-cmds cmd))
@@ -202,8 +203,5 @@
          (ellipse wid hei 'solid col)]
         [(symbol=? 'rectangle (shape-type shape))
          (rectangle wid hei 'solid col)])))
-
-
-(run-animation ANIMATION1)
 
   
