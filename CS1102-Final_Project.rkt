@@ -28,7 +28,7 @@
 
 ;;All examples written assuming that the shapes are placed in the correct location based on the original pictures, even though they are not
 (define ANIMATION1
-  (let [(circle (make-shape 'ellipse (make-posn 0 100) 'red 20 20 1))
+  (let [(circle (make-shape 'ellipse (make-posn 15 100) 'red 20 20 1))
         (wall1 (make-shape 'rectangle (make-posn 300 100) 'blue 300 100 2))
         (wall2 (make-shape 'rectangle (make-posn 100 300) 'green 100 300 3))]
   (make-animation 400 400
@@ -44,7 +44,7 @@
                    )))
 
 (define ANIMATION2
-  (let [(circle (make-shape 'ellipse (make-posn 0 100) 'red 20 20 1))
+  (let [(circle (make-shape 'ellipse (make-posn 200 200) 'red 20 20 1))
         (wall1 (make-shape 'rectangle (make-posn 300 100) 'blue 300 100 2))
         (wall2 (make-shape 'rectangle (make-posn 100 300) 'green 100 300 3))]
     (make-animation 400 400
@@ -103,7 +103,8 @@
   
 ;;run-animation: animation -> void
 (define (run-animation anim)
-  (run-cmds (animation-cmds anim)))
+  (run-cmds (animation-cmds anim))
+  (set! shapes empty))
 
 ;;run-cmds: list[command] -> void
 (define (run-cmds loc)
@@ -129,19 +130,21 @@
 
 ;;move-shape: shape delta -> void
 (define (move-shape a-shape a-delta)
-  (edit-shape-posn (lookup-shape a-shape) (delta-x a-delta) (delta-y a-delta)))
+  (edit-shape-posn (lookup-shape a-shape)
+                   (+ (posn-x (shape-posn a-shape)) (delta-x a-delta))
+                   (+ (posn-y (shape-posn a-shape)) (delta-y a-delta))))
 
 ;;jump-shape: shape -> void
 (define (jump-shape a-shape)
-  (edit-shape-posn a-shape (random WIDTH) (random HEIGHT)))
+  (edit-shape-posn a-shape
+                   (random WIDTH)
+                   (random HEIGHT)))
 
 ;;edit-shape-posn: shape number number -> void
-(define (edit-shape-posn a-shape dx dy)
+(define (edit-shape-posn a-shape nx ny)
     (delete-shape a-shape)
     (add-shape (make-shape (shape-type a-shape)
-                           (let ([x (posn-x (shape-posn a-shape))]
-                                 [y (posn-y (shape-posn a-shape))])
-                             (make-posn (+ x dx) (+ y dy)))
+                           (make-posn nx ny)
                            (shape-color a-shape)
                            (shape-width a-shape)
                            (shape-height a-shape)
@@ -157,7 +160,10 @@
         [maxx (range-interp (until-xy-cond-cmd-maxx cmd) 'high)]
         [maxy (range-interp (until-xy-cond-cmd-maxy cmd) 'high)])
  (cond [(or (and (and (>= shx minx) (<= shx maxx)) (and (>= shy miny) (<= shy maxy)))
-            (or (or (< shx 0) (> shx WIDTH)) (or (< shy 0) (> shy HEIGHT))))
+            (or (< shx (/ (shape-width a-shape) 2))
+                (> shx (- WIDTH (/ (shape-width a-shape) 2)))
+                (< shy (/ (shape-height a-shape) 2))
+                (> shy (- HEIGHT (/ (shape-height a-shape) 2)))))
         (void)]
        [else
         (run-cmds (until-xy-cond-cmd-cmds cmd))
