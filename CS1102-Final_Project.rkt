@@ -26,6 +26,8 @@
 (define-struct jump-shape-cmd (shape))
 (define-struct init-shapes-cmd (los))
 (define-struct until-xy-cond-cmd (shape minx miny maxx maxy cmds))
+(define-struct until-collision-cond-cmd (shp cmds))
+(define-struct show-cmd ())
 
 (define-syntax until
   (syntax-rules ()
@@ -59,16 +61,26 @@
     [(init shape ...)
      (make-init-shapes-cmd (list shape ...))]))
 
+(define-syntax show
+  (syntax-rules ()
+    [(show)
+     (make-show-cmd)]))
+
+(define-syntax collision
+  (syntax-rules ()
+    [(collision shape1 cmds ...)
+     (make-until-collision-cond-cmd shape1 (list cmds ...))]))
+
+
 (define-syntax animation
-  (syntax-rules (: ->)
+  (syntax-rules (: -> pos size)
     [(animation twid thei
-                (shapes (sname -> type (xpos : ypos) col swidth sheight ID)
+                (shapes (sname ID -> type pos(xpos : ypos) size(swidth : sheight) col)
                         ...)
                 (commands (cmdname rest ...) ...))
      (let [(sname (make-shape 'type (make-posn xpos ypos) 'col swidth sheight ID)) ...]
        (make-animation twid thei
                        (list
-                        (init-shapes-cmd (list sname ...))
                         (cmdname rest ... ) ...)))]))
 
 
@@ -76,34 +88,57 @@
 ;;All examples written assuming that the shapes are placed in the correct location based on the original pictures, even though they are not
 (define ANIMATION1
   (animation 400 400
-             (shapes (circle -> ellipse (50 : 100) red 20 20 1)
-                     (wall -> rectangle (300 : 100) blue 300 100 2))
+             (shapes (circle 1 -> ellipse pos(50 : 100) size(20 : 20) red)
+                     (wall 2 -> rectangle pos(300 : 100) size(300 : 100) blue))
              (commands
               (init circle wall)
-              (until circle 115 'na 'na 'na
-                     (move circle dx: 5 dy: 0))
+              (show)
+              (collision circle 
+                     (move circle dx: 5 dy: 0)
+                     (show))
+              (show)
               (delete wall)
-              (until circle 'na 'na 0 'na
-                     (move circle dx: -5 dy: 1)))))
+              (show)
+              (collision circle
+                     (move circle dx: -5 dy: 1)
+                     (show)))))
 
 
 (define ANIMATION2
   (animation 400 400
-             (shapes (circle -> ellipse (50 : 100) red 20 20 1))
+             (shapes (circle 1 -> ellipse pos(50 : 100) size(20 : 20) red))
              (commands
               (init circle)
+              (show)
               (until circle 0 0 0 0
-                     (jump circle)))))
+                     (jump circle)
+                     (show)))))
 
 
-;(define ANIMATION3
-;  (animation 400 400
-;             (shapes (circle -> ellipse (20 : 20) orange 10 10 1)
-;                     (wall1 -> rectangle (320 : 200) red 20 250 2)
-;                     (wall2 -> rectangle (30 : 350) green 300 30 3))
-;             (commands
-;              (init circle wall1)
-;              ())))
+(define ANIMATION3
+  (animation 400 400
+             (shapes (circle 1 -> ellipse pos(20 : 20) size(10 : 10) orange)
+                     (wall1 2 -> rectangle pos(320 : 200) size(20 : 250) red)
+                     (wall2 3 -> rectangle pos(200 : 350) size(300 : 30) green))
+             (commands
+              (init circle wall2)
+              (show)
+              (collision circle
+                         (move circle dx: 5 dy: 10)
+                         (show))
+              (add wall1)
+              (show)
+              (move circle dx: 0 dy: -12)
+              (collision circle
+                         (move circle dx: 4 dy: -5)
+                         (show))
+              (show)
+              (move circle dx: -5 dy: 0)
+              (collision circle
+                         (move circle dx: -5 dy: -1)
+                         (show))
+              (show))))
+
 
 
 
@@ -146,7 +181,6 @@
         [(cons? loc)
          (begin
            (run-cmd (first loc))
-           (show-all)
            (sleep/yield 0.025)
            (run-cmds (rest loc)))]))
 
@@ -157,7 +191,9 @@
         [(move-shape-cmd? cmd) (move-shape (move-shape-cmd-shape cmd) (move-shape-cmd-delta cmd))]
         [(jump-shape-cmd? cmd) (jump-shape (jump-shape-cmd-shape cmd))]
         [(init-shapes-cmd? cmd) (init-vars (init-shapes-cmd-los cmd))]
-        [(until-xy-cond-cmd? cmd) (until-xy-cond (until-xy-cond-cmd-shape cmd) cmd)]))
+        [(until-xy-cond-cmd? cmd) (until-xy-cond (until-xy-cond-cmd-shape cmd) cmd)]
+        [(show-cmd? cmd) (show-all)]
+        [(until-collision-cond-cmd? cmd) (until-collision cmd)]))
 
 
 ;;move-shape: shape delta -> void
@@ -203,11 +239,72 @@
            (until-xy-cond a-shape cmd)])))
 
 ;;range-interp: value -> number
+(check-expect (range-interp 50 'low) 50)
+(check-expect (range-interp 'na 'low) -10000)
+(check-expect (range-interp 'na 'high) 10000)
 (define (range-interp val type)
   (cond [(symbol? val) (if (symbol=? type 'low)
                            -10000
                            10000)]
         [else val]))
+
+
+;;until-collision: command -> void
+(define (until-collision acmd)
+  (cond [(any-collision? (until-collision-cond-cmd-shp acmd)
+                        (map (lambda (var) (var-value var)) shapes))
+         (void)]
+        [else
+         (run-cmds (until-collision-cond-cmd-cmds acmd))
+         (until-collision acmd)]))
+
+;;any-collision: shape list[shape]-> boolean
+(define (any-collision? ashp los)
+  (or (member true (map (lambda (shp) (cond [(= (shape-ID ashp) (shape-ID shp))
+                                         empty]
+                                        [else (collision?
+                                                (lookup-shape ashp)
+                                                (lookup-shape shp))])) los))
+      (offscreen? (lookup-shape ashp))))
+   
+;;collision?: shape shape -> boolean
+(check-expect (collision? (make-shape 'circle (make-posn -10 100) 'blue 10 10 1)
+                          (make-shape 'circle (make-posn 100 100) 'blue 10 10 2))
+              false)
+;(check-expect (collision? (make-shape 'circle (make-posn 
+(define (collision? shp1 shp2)
+  (let* ([s1x (posn-x (shape-posn shp1))]
+         [s1y (posn-y (shape-posn shp1))]
+         [s2x (posn-x (shape-posn shp2))]
+         [s2y (posn-y (shape-posn shp2))]
+         [s1w (/ (shape-width shp1) 2)]
+         [s1minx (- s1x s1w)]
+         [s1maxx (+ s1x s1w)]
+         [s1h (/ (shape-height shp1) 2)]
+         [s1miny (- s1y s1h)]
+         [s1maxy (+ s1y s1h)]
+         [s2w (/ (shape-width shp2) 2)]
+         [s2minx (- s2x s2w)]
+         [s2maxx (+ s2x s2w)]
+         [s2h (shape-height shp2)]
+         [s2miny (- s2y s2h)]
+         [s2maxy (+ s2y s2h)])
+    (or (and (> s1maxx s2minx) (< s1maxx s2maxx) (> s1y s2miny) (< s1y s2maxy))
+        (and (< s1minx s2maxx) (> s1minx s2minx) (> s1y s2miny) (< s1y s2maxy))
+        (and (< s1x s2maxx) (> s1x s2minx) (> s1maxy s2miny) (< s1maxy s2maxy))
+        (and (< s1x s2maxx) (> s1x s2minx) (< s1miny s2maxy) (> s1miny s2miny)))))
+
+
+;;offscreen?
+(define (offscreen? ashp)
+  (let* ([s1x (posn-x (shape-posn ashp))]
+         [s1y (posn-y (shape-posn ashp))]
+         [s1w (/ (shape-width ashp) 2)]
+         [s1h (/ (shape-height ashp) 2)])
+  (or (<= s1x s1w)
+      (>= s1x (- WIDTH s1w))
+      (<= s1y s1h)
+      (>= s1y (- HEIGHT s1h)))))
 
 ;;show-all: -> void
 (define (show-all)
