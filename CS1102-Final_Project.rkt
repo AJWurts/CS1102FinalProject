@@ -3,6 +3,8 @@
 (require test-engine/racket-gui)
 (require "world-cs1102.rkt")
 (require test-engine/racket-tests)
+
+
 ;; a shape is (make-shape symbol posn color)
 ;; acceptable shape types are 'triangle, 'ellipse, and 'rectangle
 (define-struct shape (type posn color width height ID))
@@ -14,18 +16,18 @@
 (define-struct animation (width height cmds))
 
 ;; a cmd is either
-;; - (make-dd-cmd shape)
+;; - (make-add-cmd shape)
 ;; - (make-delete-shape-cmd shape)
 ;; - (make-move-shape-cmd shape)
 ;; - (make-jump-shape-cmd shape)
 ;; - (make-init-shapes-cmd list[shape])
-;; - (define-struct cmds-until-xy-cond (shp1 minx miny maxx maxy cmd))
+;; - (make-show-cmd)
+;; - (make-until-collision-cond-cmd shape list[shape])
 (define-struct add-shape-cmd (shape))
 (define-struct delete-shape-cmd (shape))
 (define-struct move-shape-cmd (shape delta))
 (define-struct jump-shape-cmd (shape))
 (define-struct init-shapes-cmd (los))
-(define-struct until-xy-cond-cmd (shape minx miny maxx maxy cmds))
 (define-struct until-collision-cond-cmd (shp cmds))
 (define-struct show-cmd ())
 
@@ -129,17 +131,33 @@
               (add wall1)
               (show)
               (move circle dx: 0 dy: -12)
+              (show)
               (collision circle
                          (move circle dx: 4 dy: -5)
                          (show))
               (show)
               (move circle dx: -5 dy: 0)
+              (show)
               (collision circle
                          (move circle dx: -5 dy: -1)
                          (show))
               (show))))
 
-
+(define ANIMATION4
+  (animation 400 400
+             (shapes (circle 1 -> ellipse pos(100 : 350) size(30 : 30) blue)
+                     (wall 2 -> rectangle pos(200 : 40) size(400 : 20) yellow))
+             (commands
+              (init circle wall)
+              (show)
+              (collision circle
+                         (move circle dx: 0 dy: -9)
+                         (show))
+              (show)
+              (move circle dx: 0 dy: 12)
+              (collision circle
+                         (move circle dx: 0 dy: 9)
+                         (show)))))
 
 
 ; Interpreter
@@ -153,29 +171,35 @@
 (define-struct var (ID value))
 
 ;; init-vars: list[values] -> void
+;; takes a list of values turns them into variables and adds them to the list of shapes
 (define (init-vars a-list)
   (set! shapes (map (lambda (shpe) (make-var (shape-ID shpe) shpe)) a-list)))
 
 ;; lookup-shape: shape -> shape
+;; takes a shape and returns the shape with the same ID saved in shapes
 (define (lookup-shape a-shape)
   (var-value (first (filter (lambda (a-var) (= (var-ID a-var) (shape-ID a-shape))) shapes))))
 
 ;; delete-shape: shape -> void
+;; takes a shape and deletes the same with the same ID as the one in shapes
 (define (delete-shape a-shape)
   (set! shapes (filter (lambda (a-var) (not (= (var-ID a-var) (shape-ID a-shape))))
                        shapes)))
 
 
 ;; add-shape: shape -> void
+;; takes a shape and adds it to the shapes variable
 (define (add-shape shape)
   (set! shapes (append shapes (list (make-var (shape-ID shape) shape)))))
 
 ;;run-animation: animation -> void
+;; runs an animation
 (define (run-animation anim)
   (run-cmds (animation-cmds anim))
   (set! shapes empty))
 
 ;;run-cmds: list[command] -> void
+;; runs a list of commands
 (define (run-cmds loc)
   (cond [(empty? loc) (void)]
         [(cons? loc)
@@ -185,18 +209,19 @@
            (run-cmds (rest loc)))]))
 
 ;;run-cmd: cmd -> void
+;; runs a command
 (define (run-cmd cmd)
   (cond [(add-shape-cmd? cmd) (add-shape (add-shape-cmd-shape cmd))]
         [(delete-shape-cmd? cmd) (delete-shape (delete-shape-cmd-shape cmd))]
         [(move-shape-cmd? cmd) (move-shape (move-shape-cmd-shape cmd) (move-shape-cmd-delta cmd))]
         [(jump-shape-cmd? cmd) (jump-shape (jump-shape-cmd-shape cmd))]
         [(init-shapes-cmd? cmd) (init-vars (init-shapes-cmd-los cmd))]
-        [(until-xy-cond-cmd? cmd) (until-xy-cond (until-xy-cond-cmd-shape cmd) cmd)]
         [(show-cmd? cmd) (show-all)]
         [(until-collision-cond-cmd? cmd) (until-collision cmd)]))
 
 
 ;;move-shape: shape delta -> void
+;; moves a shape by adding the values saved in delta to its x and y posn
 (define (move-shape a-shape a-delta)
   (let ([nshape (lookup-shape a-shape)])
     (edit-shape-posn nshape
@@ -204,12 +229,14 @@
                      (+ (posn-y (shape-posn nshape)) (delta-y a-delta)))))
 
 ;;jump-shape: shape -> void
+;; moves a shape to a random location on the screen
 (define (jump-shape a-shape)
   (edit-shape-posn a-shape
                    (random WIDTH)
                    (random HEIGHT)))
 
 ;;edit-shape-posn: shape number number -> void
+;; changes a shapes position to the two numbers given
 (define (edit-shape-posn a-shape nx ny)
   (delete-shape a-shape)
   (add-shape (make-shape (shape-type a-shape)
@@ -219,37 +246,9 @@
                          (shape-height a-shape)
                          (shape-ID a-shape))))
 
-;;until-xy-cond: shape cmd -> void
-(define (until-xy-cond a-shape cmd)
-  (let* ([nshape (lookup-shape a-shape)]
-         [shx (posn-x (shape-posn nshape))]
-         [shy (posn-y (shape-posn nshape))]
-         [minx (range-interp (until-xy-cond-cmd-minx cmd) 'low)]
-         [miny (range-interp (until-xy-cond-cmd-miny cmd) 'low)]
-         [maxx (range-interp (until-xy-cond-cmd-maxx cmd) 'high)]
-         [maxy (range-interp (until-xy-cond-cmd-maxy cmd) 'high)])
-    (cond [(or (and (and (>= shx minx) (<= shx maxx)) (and (>= shy miny) (<= shy maxy)))
-               (or (< shx (/ (shape-width a-shape) 2))
-                   (> shx (- WIDTH (/ (shape-width a-shape) 2)))
-                   (< shy (/ (shape-height a-shape) 2))
-                   (> shy (- HEIGHT (/ (shape-height a-shape) 2)))))
-           (void)]
-          [else
-           (run-cmds (until-xy-cond-cmd-cmds cmd))
-           (until-xy-cond a-shape cmd)])))
-
-;;range-interp: value -> number
-(check-expect (range-interp 50 'low) 50)
-(check-expect (range-interp 'na 'low) -10000)
-(check-expect (range-interp 'na 'high) 10000)
-(define (range-interp val type)
-  (cond [(symbol? val) (if (symbol=? type 'low)
-                           -10000
-                           10000)]
-        [else val]))
-
-
 ;;until-collision: command -> void
+;;takes a until-collision command and checks to runs the commands inside until the given
+;;shape collides with something
 (define (until-collision acmd)
   (cond [(any-collision? (until-collision-cond-cmd-shp acmd)
                         (map (lambda (var) (var-value var)) shapes))
@@ -258,20 +257,24 @@
          (run-cmds (until-collision-cond-cmd-cmds acmd))
          (until-collision acmd)]))
 
-;;any-collision: shape list[shape]-> boolean
+;;any-collision?: shape list[shape]-> boolean
+;;detects if the given shape has hit any other shape or the edge of the screen
 (define (any-collision? ashp los)
-  (or (member true (map (lambda (shp) (cond [(= (shape-ID ashp) (shape-ID shp))
+  (or (offscreen? (lookup-shape ashp))
+      (member true (map (lambda (shp) (cond [(= (shape-ID ashp) (shape-ID shp))
                                          empty]
                                         [else (collision?
                                                 (lookup-shape ashp)
-                                                (lookup-shape shp))])) los))
-      (offscreen? (lookup-shape ashp))))
+                                                (lookup-shape shp))])) los))))
    
 ;;collision?: shape shape -> boolean
-(check-expect (collision? (make-shape 'circle (make-posn -10 100) 'blue 10 10 1)
-                          (make-shape 'circle (make-posn 100 100) 'blue 10 10 2))
+;;detects whether two shapes have collided with eachother
+(check-expect (collision? (make-shape 'circle (make-posn 100 100) 'blue 10 10 1)
+                              (make-shape 'circle (make-posn 100 100) 'blue 10 10 1))
+              true)
+(check-expect (collision? (make-shape 'circle (make-posn 100 100) 'blue 10 10 1)
+                              (make-shape 'circle (make-posn 100 200) 'blue 10 10 1))
               false)
-;(check-expect (collision? (make-shape 'circle (make-posn 
 (define (collision? shp1 shp2)
   (let* ([s1x (posn-x (shape-posn shp1))]
          [s1y (posn-y (shape-posn shp1))]
@@ -295,7 +298,12 @@
         (and (< s1x s2maxx) (> s1x s2minx) (< s1miny s2maxy) (> s1miny s2miny)))))
 
 
-;;offscreen?
+;;offscreen?: shape -> boolean
+;;detects whether the given shape is offscreen or not
+(check-expect (offscreen? (make-shape 'circle (make-posn -10 100) 'blue 10 10 1))
+              true)
+(check-expect (offscreen? (make-shape 'circle (make-posn 100 100) 'blue 10 10 1))
+              false)
 (define (offscreen? ashp)
   (let* ([s1x (posn-x (shape-posn ashp))]
          [s1y (posn-y (shape-posn ashp))]
@@ -307,16 +315,19 @@
       (>= s1y (- HEIGHT s1h)))))
 
 ;;show-all: -> void
+;;shows all shapes in the shapes variable
 (define (show-all)
   (update-frame (show-shapes (map (lambda (item) (var-value item)) shapes))))
 
 ;;show-shapes: list[shape] -> scene
+;;produces a scene with all shapes placed on it
 (define (show-shapes los)
   (cond [(empty? los) (empty-scene WIDTH HEIGHT)]
         [(cons? los)
          (show-shape (first los) (show-shapes (rest los)))]))
 
 ;;show-shape: shape scene -> scene
+;; takes a shape and another scene and returns a new scene with the shape on it
 (define (show-shape shape scene)
   (let ([nshape (lookup-shape shape)])
     (place-image (make-shape-img nshape)
@@ -324,6 +335,7 @@
                  scene)))
 
 ;;make-shape-img: shape -> image
+;;generates an image to correspond to the shape input
 (define (make-shape-img shape)
   (let [(wid (shape-width shape))
         (hei (shape-height shape))
@@ -336,5 +348,6 @@
          (ellipse wid hei 'solid col)]
         [(symbol=? 'rectangle (shape-type shape))
          (rectangle wid hei 'solid col)])))
+
 
 (test)
