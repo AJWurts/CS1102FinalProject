@@ -4,8 +4,23 @@
 The 4 animations already made are A1, A2, A3, A4.
 2. Everything aspect of the program is functional. All features asked for by the project
 assignment page work. Repeated code blocks work well. The macro language works as long as
-the syntax is right as in any programming language. 
-3. 
+the syntax is right as in any programming language.
+3. The biggest change was consolidating all the shapes types into one shape structure with a type
+to differentiate between the shapes. This made it easier to generalize the functions written to work on
+all shapes used in the program, even if one was a circle and one was a rectangle.
+I also added a lot more data to shape to include color width height and ID. The ID
+is to track the shape once the interpretor has it to allow for the shape to be called by
+name when being used in the language. As for functions I consolidated repeat-until-offscreen
+and move-until-collide into one function to simplify things. The show-shape command was also
+turned into show-all so that the user didn't need to repeat a lot of code. The amount a shape
+moved was also moved into the move command instead of being a constant in the shape structure.
+This made the code easier to understand, and made things in general simpler.
+4. The implemetation of global variables is quite messy. I added a var structure that wasnt required and it
+just complicated the get and sets. I also think I should have thought of a better way to implement (show)
+so the user does not have to type it out so many times in a program. I initially had it just show after every command
+but that does not allow shapes to move simultaneously. Other than those small things, I think overall everything is
+satisfactory. The language with the macros turned out well, and is (hopefully) easy to understand and use. It
+definitely makes writing the animations a lot faster. 
 |#
 (require test-engine/racket-gui)
 (require "world-cs1102.rkt")
@@ -152,7 +167,7 @@ the syntax is right as in any programming language.
 
 (define A4
   (animation 400 400
-             (shapes (circle 1 -> ellipse pos(100 : 350) size(30 : 30) blue)
+             (shapes (circle 1 -> triangle pos(100 : 350) size(30 : 30) blue)
                      (wall 2 -> rectangle pos(200 : 40) size(400 : 20) yellow))
              (commands
               (init circle wall)
@@ -303,8 +318,6 @@ the syntax is right as in any programming language.
                                             [else (collision? ashp shp)])) los))))
 ;;collision?: shape shape -> boolean
 ;;detects whether two shapes have collided with eachother
-
-
 (define (collision? shp1 shp2)
   (let* ([s1x (posn-x (shape-posn shp1))]
          [s1y (posn-y (shape-posn shp1))]
@@ -367,13 +380,11 @@ the syntax is right as in any programming language.
         (hei (shape-height shape))
         (col (shape-color shape))]
     (cond [(symbol=? 'triangle (shape-type shape))
-         (isosceles-triangle (sqrt (+ (expt hei 2) (expt (* .5 wid) 2)))
-                             (* 2 (tan (/ (* .5 (shape-width shape)) (shape-height))))
-                             'solid col)]
-        [(symbol=? 'ellipse (shape-type shape))
-         (ellipse wid hei 'solid col)]
-        [(symbol=? 'rectangle (shape-type shape))
-         (rectangle wid hei 'solid col)])))
+           (triangle wid 'solid col)]
+          [(symbol=? 'ellipse (shape-type shape))
+           (ellipse wid hei 'solid col)]
+          [(symbol=? 'rectangle (shape-type shape))
+           (rectangle wid hei 'solid col)])))
 
 
 (test)
