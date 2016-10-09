@@ -110,7 +110,7 @@
              (commands
               (init circle)
               (show)
-              (until circle 0 0 0 0
+              (collision circle
                      (jump circle)
                      (show)))))
 
